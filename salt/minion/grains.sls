@@ -28,8 +28,11 @@ salt_minion_grains_pkg_validity_check:
 
 {%- for service_name, service in pillar.items() %}
   {%- set support_fragment_file = service_name+'/meta/salt.yml' %}
-  {%- macro load_support_file() %}{% include support_fragment_file ignore missing %}{% endmacro %}
-  {%- set support_yaml = load_support_file()|load_yaml %}
+  {%- if not salt['file.file_exists'](support_fragment_file) %}
+  {%- set support_yaml = False %}
+  {%- else %}
+  {%- import_yaml support_fragment_file as support_yaml %}
+  {%- endif %}
 
   {%- if support_yaml %}
     {%- for name, grain in support_yaml.get('grain', {}).iteritems() %}
