@@ -1,8 +1,11 @@
 {%- set service_grains = {'salt': {'graph': []}} %}
 {%- for service_name, service in pillar.items() %}
   {%- set grains_fragment_file = service_name+'/meta/meta.yml' %}
-  {%- macro load_grains_file() %}{% include grains_fragment_file ignore missing %}{% endmacro %}
-  {%- set grains_yaml = load_grains_file()|load_yaml %}
+  {%- if not salt['file.file_exists'](grains_fragment_file) %}
+  {%- set grains_fragment_file = False %}
+  {%- else %}
+  {%- import_yaml grains_fragment_file as grains_yaml %}
+  {%- endif %}
   {%- if grains_yaml is mapping %}
     {%- for node in grains_yaml.graph %}
     {%- do service_grains.salt.graph.append(node) %}
