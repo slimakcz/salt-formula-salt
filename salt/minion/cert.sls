@@ -42,6 +42,7 @@ salt_minion_cert_{{ cert_name }}_dirs:
       - cmd: salt_minion_cert_{{ cert_name }}_all
     {%- endif %}
 
+# TODO: Squash this with the previous state after switch to Salt version >= 2016.11.2
 {{ key_file }}_key_permissions:
   file.managed:
     - name: {{ key_file }}
@@ -53,7 +54,7 @@ salt_minion_cert_{{ cert_name }}_dirs:
     - group: {{ cert.get("group", "root") }}
     {%- endif %}
     - replace: false
-    - watch:
+    - require:
       - x509: {{ key_file }}
 
 {{ cert_file }}:
@@ -90,6 +91,7 @@ salt_minion_cert_{{ cert_name }}_dirs:
       - cmd: salt_minion_cert_{{ cert_name }}_all
     {%- endif %}
 
+# TODO: Squash this with the previous state after switch to Salt version >= 2016.11.2
 {{ cert_file }}_cert_permissions:
   file.managed:
     - name: {{ cert_file }}
@@ -101,7 +103,7 @@ salt_minion_cert_{{ cert_name }}_dirs:
     - group: {{ cert.get("group", "root") }}
     {%- endif %}
     - replace: false
-    - watch:
+    - require:
       - x509: {{ cert_file }}
 
 {%- if cert.host is defined and ca_file not in created_ca_files %}
@@ -121,16 +123,24 @@ salt_minion_cert_{{ cert_name }}_dirs:
     {%- endif %}
 
 
+# TODO: Squash this with the previous state after switch to Salt version >= 2016.11.2
 {{ ca_file }}_cert_permissions:
   file.managed:
     - name: {{ ca_file }}
     - mode: 0644
-    - watch:
+    {%- if salt['user.info'](cert.get("user", "root")) %}
+    - user: {{ cert.get("user", "root") }}
+    {%- endif %}
+    {%- if salt['group.info'](cert.get("group", "root")) %}
+    - group: {{ cert.get("group", "root") }}
+    {%- endif %}
+    - require:
       - x509: {{ ca_file }}
 
 {%- endif %}
 
 {%- endfor %}
+
 {%- do created_ca_files.append(ca_file) %}
 {%- endif %}
 
@@ -151,7 +161,7 @@ salt_minion_cert_{{ cert_name }}_all:
     - group: {{ cert.get("group", "root") }}
     {%- endif %}
     - replace: false
-    - watch:
+    - require:
       - cmd: salt_minion_cert_{{ cert_name }}_all
 {%- endif %}
 
@@ -161,13 +171,7 @@ salt_minion_cert_{{ cert_name }}_all:
 
 salt_ca_certificates_packages:
   pkg.installed:
-{%- if grains.os_family == 'Debian' %}
-    - name: ca-certificates
-{%- elif grains.os_family == 'RedHat' %}
-    - name: ca-certificates
-{%- else %}
-    - name: []
-{%- endif %}
+    - names: {{ minion.cert_pkgs }}
 
 salt_update_certificates:
   cmd.wait:
@@ -186,17 +190,16 @@ salt_update_certificates:
 {%- for trusted_ca_minion in minion.get('trusted_ca_minions', []) %}
 {%- for ca_host, certs in salt['mine.get'](trusted_ca_minion+'*', 'x509.get_pem_entries').iteritems() %}
 {%- for ca_path, ca_cert in certs.iteritems() %}
-{%- if ca_path.startswith('/etc/pki/ca/') and ca_path.endswith('ca.crt') %}
+{%- if ca_path.endswith('ca.crt') %}
 
 {# authority name can be obtained only from a cacert path in case of mine.get #}
-{%- set ca_authority = ca_path.split("/")[4] %}
+{%- set ca_authority = ca_path.split("/")[-2] %}
 {%- set cacert_file="%s/ca-%s.crt" % (cacerts_dir,ca_authority) %}
 
 salt_trust_ca_{{ cacert_file }}:
   x509.pem_managed:
     - name: {{ cacert_file }}
     - text: {{ ca_cert|replace('\n', '') }}
-    - makedirs: True
     - watch_in:
       - file: salt_trust_ca_{{ cacert_file }}_permissions
       - cmd: salt_update_certificates

@@ -21,6 +21,8 @@ default:
     files: /srv/salt/env
   pillar:
     engine: salt
+  max_event_size: 100000000
+  minion_data_cache: 'localfs'
 {%- endload %}
 
 {%- load_yaml as master_specific %}
@@ -83,6 +85,7 @@ default:
   {%- if pillar.salt.get('minion', {}).get('source', {}).version is defined %}
   version: {{ pillar.salt.minion.source.version }}
   {%- endif %}
+  max_event_size: 100000000
 {%- endload %}
 
 {%- load_yaml as minion_specific %}
@@ -95,6 +98,8 @@ Debian:
   - python-m2crypto
   - python-psutil
   - python-yaml
+  cert_pkgs:
+  - ca-certificates
 Gentoo:
   pkgs:
   - app-admin/salt
@@ -107,6 +112,8 @@ RedHat:
   - m2crypto
   - psutils
   - PyYAML
+  cert_pkgs:
+  - ca-certificates
 {%- endload %}
 
 {%- if pillar.salt.minion is defined %}
